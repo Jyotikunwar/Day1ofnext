@@ -1,11 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { ChangeEvent, FormEvent, useState } from "react"
 import { z } from "zod"
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
   FieldSet,
@@ -26,41 +27,60 @@ const signupSchema = z
     path: ["confirmPassword"],
   })
 
+type SignupForm = z.infer<typeof signupSchema>
+
 export default function Signup() {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<SignupForm>({
     fullname: "",
     email: "",
     contact: "",
     password: "",
     confirmPassword: "",
   })
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Partial<Record<keyof SignupForm, string>>>({})
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
-    setForm((prev) => ({ ...prev, [id]: value }))
+    setForm((prev) => ({ ...prev, [id]: value } as SignupForm))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const result = signupSchema.safeParse(form)
-    if (!result.success) {
-      const fieldErrors: Record<string, string> = {}
-      result.error.issues.forEach((issue) => {
-        const field = issue.path[0]
-        if (typeof field === "string") {
-          fieldErrors[field] = issue.message
-        }
-      })
-      
-      setErrors(fieldErrors)
-      return
-    }
+ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault()
 
-    setErrors({})
+  const result = signupSchema.safeParse(form)
+
+  if (!result.success) {
+    const fieldErrors: Partial<Record<keyof SignupForm, string>> = {}
+    result.error.issues.forEach((issue) => {
+      const field = issue.path[0]
+      if (typeof field === "string" && field in form) {
+        fieldErrors[field as keyof SignupForm] = issue.message
+      }
+    })
+
+    setErrors(fieldErrors)
+    return
+  }
+
+  setErrors({})
+
+  //  API CALL (NEW PART)
+  const res = await fetch("/api/signup", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(form),
+  })
+
+  const data = await res.json()
+
+  if (res.ok) {
     alert("Signup successful")
+  } else {
+    alert(data.message || "Something went wrong")
   }
-
+}
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
@@ -82,7 +102,7 @@ export default function Signup() {
                 value={form.fullname}
                 onChange={handleChange}
               />
-              {errors.fullname && <p className="mt-1 text-sm text-red-500">{errors.fullname}</p>}
+              {errors.fullname && <FieldError>{errors.fullname}</FieldError>}
             </Field>
 
             <Field>
@@ -94,8 +114,9 @@ export default function Signup() {
                 value={form.email}
                 onChange={handleChange}
               />
-              {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+              {errors.email && <FieldError>{errors.email}</FieldError>}
             </Field>
+
             <Field>
               <FieldLabel htmlFor="contact">Contact Number</FieldLabel>
               <Input
@@ -108,7 +129,7 @@ export default function Signup() {
               <FieldDescription>
                 We will use this only for account-related updates.
               </FieldDescription>
-              {errors.contact && <p className="mt-1 text-sm text-red-500">{errors.contact}</p>}
+              {errors.contact && <FieldError>{errors.contact}</FieldError>}
             </Field>
 
             <Field>
@@ -120,7 +141,7 @@ export default function Signup() {
                 value={form.password}
                 onChange={handleChange}
               />
-              {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password}</p>}
+              {errors.password && <FieldError>{errors.password}</FieldError>}
             </Field>
 
             <Field>
@@ -132,7 +153,7 @@ export default function Signup() {
                 value={form.confirmPassword}
                 onChange={handleChange}
               />
-              {errors.confirmPassword && <p className="mt-1 text-sm text-red-500">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <FieldError>{errors.confirmPassword}</FieldError>}
             </Field>
 
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -143,6 +164,7 @@ export default function Signup() {
                 Cancel
               </Button>
             </div>
+
             <p className="pt-3 text-center text-sm text-slate-600">
               Already a member?{' '}
               <Link href="/login" className="font-semibold text-blue-600 hover:underline">
